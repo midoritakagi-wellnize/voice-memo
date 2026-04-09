@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VoiceMemo">
+<title>VoiceMemo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0d0d14;
+    --surface: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #818cf8;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  /* Header */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(13,13,20,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-title { font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+  .header-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .btn-settings {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    padding: 7px 13px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* Settings */
+  .settings-panel {
+    display: none;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+  }
+  .settings-panel.open { display: block; }
+  .settings-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  .settings-input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 13px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    margin-bottom: 8px;
+    font-family: inherit;
+  }
+  .settings-note { font-size: 11px; color: #475569; }
+  .btn-save-settings {
+    margin-top: 10px;
+    background: rgba(99,102,241,0.2);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 10px;
+    color: #a5b4fc;
+    padding: 8px 18px;
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  /* Record Area */
+  .record-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 20px 24px;
+    gap: 18px;
+  }
+  .mic-wrap { position: relative; width: 96px; height: 96px; }
+  .mic-ring {
+    position: absolute;
+    inset: -12px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(239,68,68,0.25) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity .3s;
+    animation: none;
+  }
+  .mic-ring.active { opacity: 1; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+  }
+  .btn-mic {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    border: none;
+    font-size: 30px;
+    cursor: pointer;
+    transition: background .3s, box-shadow .3s, transform .1s;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    box-shadow: 0 0 28px rgba(99,102,241,0.4);
+    position: relative;
+    z-index: 1;
+  }
+  .btn-mic.recording {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 0 28px rgba(239,68,68,0.5);
+  }
+  .btn-mic:active { transform: scale(.94); }
+  .record-hint { font-size: 13px; color: var(--muted); text-align: center; }
+  .record-hint.active { color: #f87171; }
+
+  /* Transcript box */
+  .transcript-box {
+    width: 100%; max-width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 13px 15px;
+    font-size: 14px;
+    color: #cbd5e1;
+    min-height: 54px;
+    line-height: 1.65;
+    display: none;
+  }
+  .transcript-box.show { display: block; }
+  .transcript-placeholder { color: #334155; }
+
+  /* Filters */
+  .filters {
+    display: flex;
+    gap: 7px;
+    padding: 0 16px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .filter-btn {
+    white-space: nowrap;
+    padding: 5px 13px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .2s;
+  }
+  .filter-btn.active {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.2);
+    color: #a5b4fc;
+  }
+
+  /* Memo List */
+  .memo-list { padding: 0 14px 80px; display: flex; flex-direction: column; gap: 11px; }
+  .empty-state { text-align: center; color: #1e293b; padding: 48px 0; font-size: 14px; }
+  .empty-icon { font-size: 36px; display: block; margin-top: 12px; }
+
+  .memo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 14px 14px 18px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn .25s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+  .memo-accent {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+  .memo-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .memo-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .badge-cat {
+    border-radius: 7px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .badge-pri {
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+  .btn-delete {
+    background: none; border: none;
+    color: #334155; font-size: 18px;
+    cursor: pointer; padding: 2px 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .memo-summary { font-weight: 600; font-size: 15px; color: #f1f5f9; margin-bottom: 5px; }
+  .memo-text { font-size: 13px; color: #94a3b8; line-height: 1.65; margin-bottom: 9px; }
+  .memo-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
+  .tag {
+    font-size: 11px; color: #6366f1;
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 6px; padding: 2px 8px;
+  }
+  .memo-footer { display: flex; align-items: center; justify-content: space-between; }
+  .memo-date { font-size: 11px; color: #1e293b; }
+  .btn-notion {
+    padding: 5px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .2s;
+  }
+  .btn-notion.saved {
+    border-color: rgba(16,185,129,0.3);
+    background: rgba(16,185,129,0.1);
+    color: #34d399;
+    cursor: default;
+  }
+  .btn-notion:not(.saved):active { opacity: .7; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(30,30,46,0.95);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transition: all .3s;
+    z-index: 100;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">🎙️ VoiceMemo</div>
+    <div class="header-sub">音声 → 自動分類 × Notion</div>
+  </div>
+  <button class="btn-settings" onclick="toggleSettings()">⚙️ 設定</button>
+</div>
+
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-label">Notion連携</div>
+  <input class="settings-input" id="inputToken" placeholder="Integration Token (secret_...)" type="password">
+  <input class="settings-input" id="inputDb" placeholder="Database ID（32文字）">
+  <div class="settings-note">💡 Notion Integrationを作成し、対象データベースと連携してください</div>
+  <button class="btn-save-settings" onclick="saveSettings()">保存する</button>
+</div>
+
+<div class="record-area">
+  <div class="mic-wrap">
+    <div class="mic-ring" id="micRing"></div>
+    <button class="btn-mic" id="btnMic" onclick="toggleRecord()">🎙️</button>
+  </div>
+  <div class="record-hint" id="recordHint">タップして録音開始</div>
+  <div class="transcript-box" id="transcriptBox">
+    <span class="transcript-placeholder">音声を認識しています…</span>
+  </div>
+</div>
+
+<div class="filters" id="filterBar"></div>
+<div class="memo-list" id="memoList"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────
+let memos = JSON.parse(localStorage.getItem('vm_memos') || '[]');
+let recognition = null;
+let isRecording = false;
+let liveText = '';
+let currentFilter = 'すべて';
+let notionToken = localStorage.getItem('vm_notion_token') || '';
+let notionDb = localStorage.getItem('vm_notion_db') || '';
+
+// ── Categories ─────────────────────────────────────────
+const CATEGORIES = {
+  'アイデア': { icon:'💡', color:'#F59E0B', bg:'rgba(245,158,11,0.12)' },
+  'タスク':   { icon:'✅', color:'#10B981', bg:'rgba(16,185,129,0.12)' },
+  'メモ':     { icon:'📝', color:'#6366F1', bg:'rgba(99,102,241,0.12)' },
+  '感情':     { icon:'💭', color:'#EC4899', bg:'rgba(236,72,153,0.12)' },
+  '学び':     { icon:'📚', color:'#3B82F6', bg:'rgba(59,130,246,0.12)' },
+  'その他':   { icon:'🗂️', color:'#6B7280', bg:'rgba(107,114,128,0.12)' },
+};
+
+// ── Rule-based classifier ──────────────────────────────
+function classify(text) {
+  const t = text;
+  const rules = [
+    { cat:'タスク',   re:/やる|する|しなければ|買う|連絡|予約|確認|送る|調べる|作る|締め切り|期限|TODO|todo/ },
+    { cat:'アイデア', re:/アイデア|思いついた|どうかな|できそう|面白い|企画|提案|もしも|〜したら|かもしれない/ },
+    { cat:'感情',     re:/嬉しい|悲しい|辛い|楽しい|疲れた|怒|不安|ワクワク|モヤ|スッキリ|感動|気持ち/ },
+    { cat:'学び',     re:/学んだ|覚えた|知った|発見|なるほど|勉強|読んだ|聞いた|気づき|ポイント|まとめ/ },
+    { cat:'メモ',     re:/メモ|覚書|忘れずに|記録|残して|ちなみに|参考/ },
+  ];
+  for (const r of rules) {
+    if (r.re.test(t)) return r.cat;
+  }
+  return 'その他';
+}
+
+function extractTags(text) {
+  const words = text.replace(/[、。！？\s]/g, ' ').split(' ').filter(w => w.length >= 2 && w.length <= 8);
+  const stopwords = new Set(['ので','から','けど','ます','です','した','して','ある','いる','思う','感じ','なので']);
+  const tags = [...new Set(words.filter(w => !stopwords.has(w)))].slice(0, 3);
+  return tags;
+}
+
+function getPriority(text) {
+  if (/急ぎ|今日|明日|すぐ|早急|重要|大事|必ず/.test(text)) return '高';
+  if (/今週|近いうち|そのうち/.test(text)) return '中';
+  return '低';
+}
+
+function summarize(text) {
+  // Strip fillers and trim to ~15 chars
+  const clean = text.replace(/えーっと|あのー?|そのー?|うーん/g, '').trim();
+  return clean.length > 18 ? clean.slice(0, 17) + '…' : clean;
+}
+
+// ── Speech Recognition ─────────────────────────────────
+function toggleRecord() {
+  isRecording ? stopRecord() : startRecord();
+}
+
+function startRecord() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('⚠️ このブラウザは非対応です（Chrome推奨）'); return; }
+  recognition = new SR();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  liveText = '';
+
+  recognition.onresult = e => {
+    let final = '';
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (final) liveText += final;
+    const box = document.getElementById('transcriptBox');
+    box.textContent = liveText + interim;
+    if (!box.textContent) box.innerHTML = '<span class="transcript-placeholder">音声を認識しています…</span>';
+  };
+
+  recognition.onend = () => { if (isRecording) recognition.start(); }; // auto-restart
+  recognition.onerror = e => { if (e.error !== 'no-speech') { stopRecord(); showToast('エラー: ' + e.error); } };
+
+  recognition.start();
+  isRecording = true;
+  document.getElementById('btnMic').className = 'btn-mic recording';
+  document.getElementById('btnMic').textContent = '⏹️';
+  document.getElementById('micRing').className = 'mic-ring active';
+  document.getElementById('recordHint').textContent = '録音中 — タップで停止';
+  document.getElementById('recordHint').className = 'record-hint active';
+  document.getElementById('transcriptBox').className = 'transcript-box show';
+}
+
+function stopRecord() {
+  isRecording = false;
+  recognition && recognition.stop();
+  document.getElementById('btnMic').className = 'btn-mic';
+  document.getElementById('btnMic').textContent = '🎙️';
+  document.getElementById('micRing').className = 'mic-ring';
+  document.getElementById('recordHint').textContent = 'タップして録音開始';
+  document.getElementById('recordHint').className = 'record-hint';
+  document.getElementById('transcriptBox').className = 'transcript-box';
+
+  const text = liveText.trim();
+  if (!text) return;
+  liveText = '';
+
+  const cat = classify(text);
+  const memo = {
+    id: Date.now(),
+    text,
+    category: cat,
+    summary: summarize(text),
+    tags: extractTags(text),
+    priority: getPriority(text),
+    createdAt: new Date().toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),
+    saved: false,
+  };
+  memos.unshift(memo);
+  persist();
+  renderFilters();
+  renderMemos();
+  showToast(`${CATEGORIES[cat].icon} ${cat} として保存しました`);
+}
+
+// ── Notion ─────────────────────────────────────────────
+async function saveToNotion(id) {
+  const memo = memos.find(m => m.id === id);
+  if (!memo || !notionToken || !notionDb) { showToast('⚙️ 設定からNotion情報を入力してください'); return; }
+  const btn = document.querySelector(`[data-notion="${id}"]`);
+  if (btn) btn.textContent = '保存中…';
+  try {
+    const res = await fetch('https://api.notion.com/v1/pages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${notionToken}`,
+        'Content-Type': 'application/json',
+        'Notion-Version': '2022-06-28',
+      },
+      body: JSON.stringify({
+        parent: { database_id: notionDb },
+        properties: {
+          Name:     { title: [{ text: { content: memo.summary } }] },
+          Category: { select: { name: memo.category } },
+          Priority: { select: { name: memo.priority } },
+          Tags:     { multi_select: memo.tags.map(t => ({ name: t })) },
+          Content:  { rich_text: [{ text: { content: memo.text } }] },
+        }
+      })
+    });
+    if (res.ok) {
+      memo.saved = true;
+      persist();
+      renderMemos();
+      showToast('✅ Notionに保存しました');
+    } else {
+      showToast('❌ 保存失敗。Token/DBを確認してください');
+      if (btn) btn.textContent = 'Notionに保存';
+    }
+  } catch {
+    showToast('❌ ネットワークエラー');
+    if (btn) btn.textContent = 'Notionに保存';
+  }
+}
+
+function deleteMemo(id) {
+  memos = memos.filter(m => m.id !== id);
+  persist();
+  renderFilters();
+  renderMemos();
+}
+
+// ── Render ─────────────────────────────────────────────
+function renderFilters() {
+  const bar = document.getElementById('filterBar');
+  const cats = ['すべて', ...Object.keys(CATEGORIES).filter(c => memos.some(m => m.category === c))];
+  bar.innerHTML = cats.map(c =>
+    `<button class="filter-btn${c === currentFilter ? ' active' : ''}" onclick="setFilter('${c}')">${c !== 'すべて' ? CATEGORIES[c].icon + ' ' : ''}${c}</button>`
+  ).join('');
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  renderFilters();
+  renderMemos();
+}
+
+function renderMemos() {
+  const list = document.getElementById('memoList');
+  const filtered = currentFilter === 'すべて' ? memos : memos.filter(m => m.category === currentFilter);
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">まだメモがありません<span class="empty-icon">🎙️</span></div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(m => {
+    const cat = CATEGORIES[m.category] || CATEGORIES['その他'];
+    const priColor = m.priority === '高' ? '#f87171' : m.priority === '中' ? '#fbbf24' : '#4b5563';
+    const priBg = m.priority === '高' ? 'rgba(239,68,68,0.1)' : m.priority === '中' ? 'rgba(245,158,11,0.1)' : 'rgba(75,85,99,0.1)';
+    const tags = m.tags.map(t => `<span class="tag">#${t}</span>`).join('');
+    const notionBtn = notionToken && notionDb
+      ? m.saved
+        ? `<button class="btn-notion saved">✓ Notion済</button>`
+        : `<button class="btn-notion" data-notion="${m.id}" onclick="saveToNotion(${m.id})">Notionに保存</button>`
+      : `<button class="btn-notion" onclick="toggleSettings()">Notion設定</button>`;
+    return `
+    <div class="memo-card">
+      <div class="memo-accent" style="background:${cat.color}"></div>
+      <div class="memo-header">
+        <div class="memo-badges">
+          <span class="badge-cat" style="background:${cat.bg};color:${cat.color}">${cat.icon} ${m.category}</span>
+          <span class="badge-pri" style="background:${priBg};color:${priColor}">${m.priority}</span>
+        </div>
+        <button class="btn-delete" onclick="deleteMemo(${m.id})">×</button>
+      </div>
+      <div class="memo-summary">${m.summary}</div>
+      <div class="memo-text">${m.text}</div>
+      ${tags ? `<div class="memo-tags">${tags}</div>` : ''}
+      <div class="memo-footer">
+        <span class="memo-date">${m.createdAt}</span>
+        ${notionBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Settings ───────────────────────────────────────────
+function toggleSettings() {
+  const p = document.getElementById('settingsPanel');
+  p.classList.toggle('open');
+  if (p.classList.contains('open')) {
+    document.getElementById('inputToken').value = notionToken;
+    document.getElementById('inputDb').value = notionDb;
+  }
+}
+function saveSettings() {
+  notionToken = document.getElementById('inputToken').value.trim();
+  notionDb = document.getElementById('inputDb').value.trim();
+  localStorage.setItem('vm_notion_token', notionToken);
+  localStorage.setItem('vm_notion_db', notionDb);
+  document.getElementById('settingsPanel').classList.remove('open');
+  renderMemos();
+  showToast('✅ 設定を保存しました');
+}
+
+// ── Utils ──────────────────────────────────────────────
+function persist() { localStorage.setItem('vm_memos', JSON.stringify(memos)); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Init ───────────────────────────────────────────────
+renderFilters();
+renderMemos();
+</script>
+</body>
+</html>

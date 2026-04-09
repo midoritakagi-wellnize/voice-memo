@@ -104,7 +104,7 @@ function classify(t) {
 
 function extractTags(text) {
   const rules = [
-    { tag: 'UAT',             re: /UAT|uat/ },
+    { tag: 'UAT',             re: /UAT|uat|UA\s*T|UT\b|ユーエーティー|ユーエイティー/ },
     { tag: '免疫チェック',    re: /免疫/ },
     { tag: 'インナーガーデン', re: /インナーガーデン|インナー|IG\b|ig\b/ },
   ];

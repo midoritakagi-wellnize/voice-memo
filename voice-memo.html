@@ -103,9 +103,14 @@ function classify(t) {
 }
 
 function extractTags(text) {
-  const words = text.replace(/[、。！？\s]/g, ' ').split(' ').filter(w => w.length >= 2 && w.length <= 8);
-  const stop = new Set(['ので','から','けど','ます','です','した','して','ある','いる','思う','感じ','なので']);
-  return [...new Set(words.filter(w => !stop.has(w)))].slice(0, 3);
+  const rules = [
+    { tag: 'UAT',             re: /UAT|uat/ },
+    { tag: '免疫チェック',    re: /免疫/ },
+    { tag: 'インナーガーデン', re: /インナーガーデン|インナー|IG\b|ig\b/ },
+  ];
+  const tags = rules.filter(r => r.re.test(text)).map(r => r.tag);
+  if (tags.length === 0) tags.push('その他');
+  return tags;
 }
 
 function getPriority(t) {
@@ -155,7 +160,7 @@ async function saveToNotion(id) {
     const res = await fetch(MAKE_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: memo.summary, category: memo.category, priority: memo.priority, tags: memo.tags.join(', '), text: memo.text })
+      body: JSON.stringify({ summary: memo.summary, category: memo.category, priority: memo.priority, tags: memo.tags, text: memo.text })
     });
     if (res.ok) {
       memo.saved = true; persist(); renderMemos();
